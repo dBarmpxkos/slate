@@ -50,7 +50,7 @@ The lower unit returns a total of nine values on demand; these values are refres
 
 The `SCD4x` module refresh rate is 5 s. 
 
-### Sensor response 
+### Sensor Response 
 
 Field | Return Range (Units) | Description
 --------- | ------- | -----------
@@ -65,6 +65,84 @@ doorStatus | T/F | Door open (holds history)
 resetStatus | T/F | Reset pressed (holds history)
 
 The fields are: `pH, EC, waterLevel_CM, CO2, temperature, rH, boostCurrent, doorStatus, resetStatus`
+
+### Sensor Stream
+
+```python
+set, sensor_stream, 1
+```
+>⏰ `ok, sensor_stream, 1`
+
+>👍`ok, value1, value2, ... , value9`
+
+A sensor stream can be activated, so the device spits data every `1 second` automatically.
+
+### Sensor Calibration
+
+```actionscript
+get, ph_cal_status
+```
+```actionscript
+get, ec_cal_status
+```
+> Gets calibration status and returns register with calibration points from EEPROM. Status register is bit-encoded successfully set points
+
+>`ok,status reg:%u,t1:%lu,t2:%lu,t3:%lu` for pH
+
+>`ok,status reg:%u,t1:%lu` for EC
+
+
+```python
+set, ph_cal_clear, 1
+```
+```python
+set, ph_cal_low, 1
+```
+```python
+set, ph_cal_mid, 1
+```
+```python
+set, ph_cal_high, 1
+```
+```python
+set, ec_cal_clear, 1
+```
+```python
+set, ec_cal_single, 1
+```
+> Sets calibration points and toggles specific bit in status register
+
+```python
+set, ph_commit, 1
+```
+```python
+set, ec_commit, 1
+```
+> Commits and activates configuration
+
+A custom calibration scheme in emulated EEPROM has been implemented; the host has to call a specific set of calibration instructions, after inserting the probe to the appropriate calibration solutions. The host can check the calibration status with `ph_cal_status` and `ec_cal_status`. If the host does not handle the calibration routine, the system will work with predefined values and accuracy will be compromised. 
+
+```c
+/**
+  * @brief  finds slope with linear regression
+  * @param  N   number of samples
+  * @param  x[N]    X axis values
+  * @param  y[N]    Y axis values
+  * @retval slope
+  */
+double find_slope(int N, const double x[N], const double y[N])
+/**
+  * @brief  finds intercept with linear regression
+  * @param  N   number of samples
+  * @param  x[N]    X axis values
+  * @param  y[N]    Y axis values
+  * @retval intercept
+  */
+double find_intercept(int N, const double x[N], const double y[N])
+```
+<aside class="warning">
+If host does not perform all the calibration points, the system will not write the values to EEPROM and will not activate the configuration. For finally setting the values to non-volatile memory, host must issue <code>set, ph_commit</code> and <code>set, ec_commit</code>.
+</aside>
 
 
 # Loads
