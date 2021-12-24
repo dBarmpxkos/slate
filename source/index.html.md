@@ -2,14 +2,12 @@
 title: API Reference
 
 language_tabs: # must be one of https://git.io/vQNgJ
-  - shell
-  - ruby
-  - python
-  - javascript
+
 
 toc_footers:
-  - <a href='#'>Sign Up for a Developer Key</a>
-  - <a href='https://github.com/slatedocs/slate'>Documentation Powered by Slate</a>
+  - Citycrop LL Driver
+  - Firmware — v2.2.1_17112021
+  - Hardware — r14.b
 
 includes:
   - errors
@@ -20,60 +18,203 @@ code_clipboard: true
 
 meta:
   - name: description
-    content: Documentation for the Kittn API
+    content: Documentation for the LL Controller UART API
 ---
 
 # Introduction
 
-Welcome to the Kittn API! You can use our API to access Kittn API endpoints, which can get information on various cats, kittens, and breeds in our database.
+Welcome to the STM32F4xx UART low level API! You can use the API to access various device endpoints, which can get sensor measurements, program a timed load, monitor current load state and more.
 
-We have language bindings in Shell, Ruby, Python, and JavaScript! You can view code examples in the dark area to the right, and you can switch the programming language of the examples with the tabs in the top right.
+The API backend is written onboard in C. The calls and the responses are simple csv messages.
 
-This example API documentation page was created with [Slate](https://github.com/slatedocs/slate). Feel free to edit it and use it as a base for your own API's documentation.
+The UART settings are `9600/8-N-1`.
 
-# Authentication
+The production version sources are always found [here](https://gitlab.com/citycrop/controller-firmware/-/tree/master/firmware/future) and the corresponding release binaries [here](https://gitlab.com/citycrop/controller-firmware/-/releases).
 
-> To authorize, use this code:
-
-```ruby
-require 'kittn'
-
-api = Kittn::APIClient.authorize!('meowmeowmeow')
-```
-
-```python
-import kittn
-
-api = kittn.authorize('meowmeowmeow')
-```
-
-```shell
-# With shell, you can just pass the correct header with each request
-curl "api_endpoint_here" \
-  -H "Authorization: meowmeowmeow"
-```
-
-```javascript
-const kittn = require('kittn');
-
-let api = kittn.authorize('meowmeowmeow');
-```
-
-> Make sure to replace `meowmeowmeow` with your API key.
-
-Kittn uses API keys to allow access to the API. You can register a new Kittn API key at our [developer portal](http://example.com/developers).
-
-Kittn expects for the API key to be included in all API requests to the server in a header that looks like the following:
-
-`Authorization: meowmeowmeow`
-
-<aside class="notice">
-You must replace <code>meowmeowmeow</code> with your personal API key.
+<aside>👋 Throughout the examples, a csv-styled <code>request</code> is followed by a csv-styled <code>response</code> like so:
 </aside>
 
-# Kittens
+### example request/response
+👉 `set,system_reset,1`
 
-## Get All Kittens
+👈 `ok,system_reset`
+
+# Sensor Data
+
+```actionscript
+get, sensor_values
+```
+>👍`ok, value1, value2, ... , value9`
+
+The lower unit returns a total of nine values on demand; these values are refreshed every 1 second.
+
+The `SCD4x` module refresh rate is 5 s. 
+
+### Sensor response 
+
+Field | Return Range (Units) | Description
+--------- | ------- | -----------
+pH | 0.0 - 14.0 | pH measured via the probe
+EC | 0 ...  (uS) | Electrical Conductivity in micro-Siemens
+waterLevel | 0, 25, 50, 75, 100 (%) | Calibrated water tank percentage (extracted from ultrasonic distance measurement)
+CO2 | value (ppm) | Carbon dioxide concentration 
+temperature | value (C) | Temperature from Pt100 inside EC probe
+rH | 0-100 (%) | Relative Humidity
+boostCurrent | 0 ~ 400 (mA) | A relatively large value indicates the load (fogger) works
+doorStatus | T/F | Door open (holds history)
+resetStatus | T/F | Reset pressed (holds history)
+
+The fields are: `pH, EC, waterLevel_CM, CO2, temperature, rH, boostCurrent, doorStatus, resetStatus`
+
+
+# Loads
+
+
+## Toggled Loads 
+
+The PCB controls various different loads, some of them being toggled (0/1) like this:
+
+### Example toggle load
+👉 `set,status_led,1`
+
+👈 `ok,status_led,1`
+
+```python
+set, status_led, 1  
+```
+> Sets `status_led` ON
+
+```python
+set, solenoid, 0
+```
+> Sets `solenoid` OFF
+
+```python
+set, buzzer, 0
+```
+```python
+set, ultrasonic, 1
+```
+```python
+set, peltier, 2
+```
+> Runs `peltier` in COLD mode
+
+```python
+set, pelt_fan1, 1
+```
+```python
+set, fan2, 1
+```
+Load | Function | Notes
+--------- | ------ | ------
+status_led | LED on button
+solenoid | 12V Solenoid
+buzzer | 12V Alarm
+ultrasonic | 24V Boost circuit (fogger)
+peltier | H-Bridge driver | 1 for HOT, 2 for COLD
+pelt_fan1 | peltier exhaust fan
+fan2 | jnsp
+<aside>
+  👋 All the above return an ack. response in the fashion
+  <code>ok, load, action</code>
+  <br>
+  👋 All the requests are also populated in a <code>get, load</code> fashion which will return the current load status like:
+</aside>
+
+### example request toggle status
+👉 `get, solenoid`
+
+👈 `ok, solenoid, 1` 
+
+
+## Timed Loads 
+
+For precice timing of load operation, there exist inner worx that control pump operation with `millisecond` precision, and other timed loads with `seconds` presicion.
+
+### Example timed load
+👉 `set,pump_grow,23`
+
+👈 `ok,pump_grow,23`
+
+>Setups a timed load
+
+```python
+set, aerator, 5
+```
+```python
+set, watering, 12
+```
+```python
+set, pump_micro, 11
+```
+```python
+set, pump_grow, 5
+```
+```python
+set, pump_bloom, 3
+```
+```python
+set, pump_boost, 4
+```
+```python
+set, pump_ph, 4
+```
+
+
+Load | Function | Notes
+--------- | ------ | ------
+aerator | Air Feed | seconds 
+watering | Watering Pump | seconds 
+pump_micro | micro pump | millisecond 
+pump_grow | micro pump | millisecond 
+pump_bloom | micro pump | millisecond 
+pump_boost | micro pump | millisecond 
+pump_ph | micro pump | millisecond 
+
+
+### Time-keeper
+
+>Gets and clears a timed load runtime
+
+```actionscript
+get, timer_micro
+```
+```python
+set, timer_micro, 0
+```
+```actionscript
+get, timer_grow
+```
+```python
+set, timer_grow, 0
+```
+```actionscript
+get, timer_bloom
+```
+```python
+set, timer_bloom, 0
+```
+```actionscript
+get, timer_boost
+```
+```python
+set, timer_boost, 0
+```
+```actionscript
+get, timer_ph
+```
+```python
+set, timer_ph, 0
+```
+
+An internal timer runs for keeping in non-volatile memory the total time ran for each micro pump. Each micro pump total runtime can be accessed and cleared.
+
+
+
+## PWM Loads 
+
+# LED Panel
 
 ```ruby
 require 'kittn'
